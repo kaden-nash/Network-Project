@@ -1,14 +1,14 @@
 import socket
-import struct
-from recv_message import recv_message
 import time
+from Message import Message
 
 HOST = "127.0.0.1"
 PORT = 55555
 
-time.sleep(5)
 
-def start_client():
+time.sleep(2)
+
+def start_client() -> None:
     client_sock = None
 
     try:
@@ -21,22 +21,25 @@ def start_client():
 
         # prepare message
         message_str = "The quick brown fox jumped over the lazy dog"
+        msg = Message("")
         message_list_strs = message_str.split(sep=" ")
         message_list_strs.reverse()
+
+        # send message
         while len(message_list_strs) > 0:
-            # send
-            time.sleep(0.5)
+            time.sleep(0.25)
             word = message_list_strs.pop()
-            word_length = struct.pack("!I", len(word))
-            client_sock.sendall(word_length + word.encode("utf-8"))
+            msg.send(client_sock, word)
 
             # receive acknowledgement
-            ack = recv_message(client_sock)
-            if not ack:
+            msg.recv(client_sock)
+            if msg.isEmpty():
                 print(f"Problem sending message: {word}")
             else:
-                print(f"Server ack: {ack}")
-    
+                print(f"Server ack: {msg}")
+        
+        # graceful disconnect
+        msg.send(client_sock, "")
 
     except ConnectionError as e:
         print(f"A connection error occured: {e}")

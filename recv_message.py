@@ -1,12 +1,13 @@
 import struct
+import socket
 
-def recv_message(sock):
+def recv_message(sock: socket.socket) -> bytes | None:
     """
-    Receives messages from clients and acknowledges
+    Receives messages from clients
 
         sock - client_socket
 
-    @returns decoded message from client, None otherwise
+    @returns encoded message from client, None otherwise
     """
     # get length of message
     raw_length = b""
@@ -26,4 +27,4 @@ def recv_message(sock):
             return None
         data += message
 
-    return data.decode('utf-8')
+    return data.decode("utf-8")

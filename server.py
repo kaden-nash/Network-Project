@@ -1,13 +1,12 @@
 import socket
 import threading
-from recv_message import recv_message
 import time
-import struct
+from Message import Message
 
 host = "127.0.0.1"
 port = 55555
 
-time.sleep(5)
+time.sleep(2)
 
 # lock to prevent race conditions
 lock = threading.Lock()
@@ -15,26 +14,29 @@ lock = threading.Lock()
 # currently connected client list
 clients = []
 
-def handle_client(client_socket, client_address):
+def handle_client(client_socket: socket.socket, client_address) -> None:
     """
     Handles session maintenance and shutdown with clients
         client_socket - socket on server for communication with a client
         client_address - Client's IPv4:PORT
     """
     try: # listen for client message
+        msg = Message("")
         while True:
-            message = recv_message(client_socket)
-
-            if not message:
-                print("Connection terminated")
+            msg.recv(client_socket)
+            if msg.isEmpty():
+                print(f"{client_address} disconnected.")
                 break
             else:
-                # acknowledge and print
-                response = "Received"
-                length_prefix = struct.pack("!I", len(response))
-                client_socket.sendall(length_prefix + response.encode("utf-8"))
+                # send message to every client
+                for sock in clients:
+                    msg.send(sock)
 
-                print(f"{client_address}: {message}")
+            print(f"{client_address}: {msg}")
+
+    except ConnectionError as e:
+        print(f"{client_address} disconnected.")
+        pass
 
     except Exception as e: # handle errors
         print(f"Error with {client_address}: {e}")
@@ -45,9 +47,8 @@ def handle_client(client_socket, client_address):
                 clients.remove(client_socket)
         
         client_socket.close()
-        print(f"Closed with connection with client {client_address}")
 
-def start_server():
+def start_server() -> None:
     """
     Initalizes server and accepts incoming connections, creating a new thread for each connection established
     """
@@ -65,22 +66,33 @@ def start_server():
         serv_sock.listen(2)
         print(f"Server listening on {host}:{port}")
 
+        # initial join time
+        serv_sock.settimeout(10.0)
+
         serv_running = True
         while serv_running:
-            # accept a connection
-            client_socket, client_address = serv_sock.accept()
-            print(f"Accepted connection from {client_address}")
+            try:
+                # accept a connection
+                client_socket, client_address = serv_sock.accept()
+                print(f"Accepted connection from {client_address}")
 
-            # start new thread for each client connecting
-            handler = threading.Thread(target=handle_client, args=[client_socket, client_address])
-            handler.start()
+                # stop blocking after 1 second if initial connection is made
+                serv_sock.settimeout(1.0)
 
-            # append with a lock
-            # threads will be removing elements from this list and 
-            # we don't want a race condition between the appends
-            # and the removes.
-            with lock:
-                clients.append(client_socket)
+                # start new thread for each client connecting
+                handler = threading.Thread(target=handle_client, args=[client_socket, client_address])
+                handler.start()
+
+                # append with a lock
+                # threads will be removing elements from this list and 
+                # we don't want a race condition between the appends
+                # and the removes.
+                with lock:
+                    clients.append(client_socket)
+
+            except socket.timeout:
+                if len(clients) == 0:
+                    break
     
     except KeyboardInterrupt:
         print(f"Beginning server shutdown due to keyboard interrupt...")
@@ -89,6 +101,7 @@ def start_server():
         print(f"Error starting server: {e}")
 
     finally:
+        print("Closing server")
         if serv_sock:
             serv_sock.close()
 
