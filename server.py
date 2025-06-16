@@ -125,11 +125,6 @@ def start_server() -> None:
                 if len(clients) == 0:
                     break
         
-        # graceful shutdown
-        try:
-            serv_sock.shutdown(socket.SHUT_RDWR)
-        except Exception:
-            print("Failed serv_sock shutdown")
     
     except KeyboardInterrupt:
         print(f"Beginning server shutdown due to keyboard interrupt...")
@@ -138,6 +133,13 @@ def start_server() -> None:
         print(f"Error in server: {e}")
 
     finally:
+        # graceful shutdown
+        try:
+            serv_sock.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            # print("Failed serv_sock shutdown")
+            pass
+
         print("Closing server")
         if serv_sock:
             serv_sock.close()
