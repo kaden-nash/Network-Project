@@ -5,8 +5,36 @@ from Message import Message
 HOST = "127.0.0.1"
 PORT = 55555
 
+exit_keywords = set()
+exit_keywords.add("/quit")
+exit_keywords.add("/exit")
 
 time.sleep(2)
+
+def send(sock: socket.socket) -> None:
+    print("Begin chat")
+    print("**************************************************")
+    count = 0
+    while count < 2:
+        raw_text = input("(me): ")
+        msg = Message(raw_text)
+        msg.send(sock)
+        count += 1
+
+
+def listen(sock: socket.socket) -> None:
+    msg = Message("")
+    while True:
+        msg.recv(sock)
+        if msg.get_text() in exit_keywords or msg.isEmpty():
+            print("<Other client disconnected>")
+            break
+        else:
+            print(f"Other client says: {msg}")
+
+    print("**************************************************")
+    print("End chat\n")
+        
 
 def start_client() -> None:
     client_sock = None
@@ -17,29 +45,13 @@ def start_client() -> None:
 
         # connect to server (initiates 3 way handshake)
         client_sock.connect((HOST, PORT))
-        print(f"Connected to {HOST}:{PORT}")
+        print(f"Connected to {HOST}:{PORT}\n")
 
-        # prepare message
-        message_str = "The quick brown fox jumped over the lazy dog"
-        msg = Message("")
-        message_list_strs = message_str.split(sep=" ")
-        message_list_strs.reverse()
-
-        # send message
-        while len(message_list_strs) > 0:
-            time.sleep(0.25)
-            word = message_list_strs.pop()
-            msg.send(client_sock, word)
-
-            # receive acknowledgement
-            msg.recv(client_sock)
-            if msg.isEmpty():
-                print(f"Problem sending message: {word}")
-            else:
-                print(f"Server ack: {msg}")
+        send(client_sock)
+        listen(client_sock)
         
         # graceful disconnect
-        msg.send(client_sock, "")
+        client_sock.shutdown(socket.SHUT_RDWR)
 
     except ConnectionError as e:
         print(f"A connection error occured: {e}")

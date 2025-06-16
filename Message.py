@@ -32,14 +32,6 @@ class Message:
         return self._text.encode("utf-8")
 
 
-    def get_decoded_text(self) -> bytes:
-        """
-        Returns the bytes of text decoded with utf-8
-        """
-
-        return self._text.decode("utf-8")
-
-
     def get_size_packed(self) -> bytes:
         """
         Returns the size of text in bytes packed into 4 byte integer

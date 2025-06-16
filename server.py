@@ -13,6 +13,36 @@ lock = threading.Lock()
 
 # currently connected client list
 clients = []
+clnt_addrs = []
+
+def broadcast(msg: Message, from_: socket.socket) -> None:
+    local_addr = from_.getsockname()
+
+    with lock:
+        clnt_copy = list(clients)
+        clnt_addrs_copy = list(clnt_addrs)
+
+        for sock, addr in zip(clnt_copy, clnt_addrs_copy):
+            if sock == from_:
+                continue
+
+            try: 
+                msg.send(sock)
+            except ConnectionError as e:
+                print(f"Connection error broadcasting from {local_addr[0]}:{local_addr[1]} to {addr[0]}:{addr[1]}: {e}")
+
+                if sock in clients:
+                    clients.remove(sock)
+                if addr in clnt_addrs:
+                    clnt_addrs.remove(addr)
+
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except Exception:
+                    pass
+                finally:
+                    sock.close()
+            
 
 def handle_client(client_socket: socket.socket, client_address) -> None:
     """
@@ -24,13 +54,13 @@ def handle_client(client_socket: socket.socket, client_address) -> None:
         msg = Message("")
         while True:
             msg.recv(client_socket)
+            time.sleep(0.5)
+
             if msg.isEmpty():
                 print(f"{client_address} disconnected.")
                 break
             else:
-                # send message to every client
-                for sock in clients:
-                    msg.send(sock)
+                broadcast(msg, client_socket)
 
             print(f"{client_address}: {msg}")
 
@@ -39,7 +69,7 @@ def handle_client(client_socket: socket.socket, client_address) -> None:
         pass
 
     except Exception as e: # handle errors
-        print(f"Error with {client_address}: {e}")
+        print(f"Error while handling client: {client_address}: {e}")
 
     finally: # close socket that communicates with client
         with lock:
@@ -89,16 +119,23 @@ def start_server() -> None:
                 # and the removes.
                 with lock:
                     clients.append(client_socket)
+                    clnt_addrs.append(client_address)
 
             except socket.timeout:
                 if len(clients) == 0:
                     break
+        
+        # graceful shutdown
+        try:
+            serv_sock.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            print("Failed serv_sock shutdown")
     
     except KeyboardInterrupt:
         print(f"Beginning server shutdown due to keyboard interrupt...")
 
     except Exception as e:
-        print(f"Error starting server: {e}")
+        print(f"Error in server: {e}")
 
     finally:
         print("Closing server")
