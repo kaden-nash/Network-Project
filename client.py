@@ -8,8 +8,6 @@ PORT = 55555
 
 exit_keywords = {"/quit", "/exit"}
 
-chat_ongoing = True
-
 stop_event = threading.Event()
 
 time.sleep(2)
@@ -18,33 +16,41 @@ def send(sock: socket.socket) -> None:
     print("Begin chat")
     print("**************************************************")
 
-    global chat_ongoing
+
     while not stop_event.is_set():
-        raw_text = input("(me): ")
+        raw_text = input()
         msg = Message(raw_text)
-        msg.send(sock)
+
+        try:
+            msg.send(sock)
+        except OSError: # prevents "socket doesn't exist" error on cleanup
+            pass
     
         if msg.get_text() in exit_keywords or msg.isEmpty():
             stop_event.set()
-
+            break
+    
 
 def listen(sock: socket.socket) -> None:
-    global chat_ongoing
     msg = Message("")
 
     while not stop_event.is_set():
-        msg.recv(sock)
+        try:
+            msg.recv(sock)
+        except OSError: # prevents "socket doesn't exist" error on cleanup
+            break
+
         if msg.get_text() in exit_keywords or msg.isEmpty():
             print("<A client disconnected>")
             stop_event.set()
         else:
             print(f"A client says: {msg}")
 
-    print("**************************************************")
-    print("End chat\n")
+    # print("**************************************************")
+    # print("End chat\n")
         
 
-def start_client() -> None:
+def start_client() -> None:    
     client_sock = None
 
     try:
@@ -61,12 +67,13 @@ def start_client() -> None:
         send_handler.start()
         listen_handler.start()
 
-        while send_handler.is_alive() or listen_handler.is_alive():
+        while send_handler.is_alive() and listen_handler.is_alive():
             time.sleep(0.5)
 
     except KeyboardInterrupt:
-        print("**************************************************")
-        print("End chat\n")
+        # print("**************************************************")
+        # print("End chat\n")
+        pass
 
     except ConnectionError as e:
         print(f"A connection error occured: {e}")
@@ -77,12 +84,17 @@ def start_client() -> None:
     finally:
         # graceful disconnect
         try:
-            client_sock.shutdown(socket.SHUT_RDWR)
+            # client_sock.shutdown(socket.SHUT_RDWR)
+            pass
         except Exception:
             # print("Failed to properly shutdown"
             pass
 
-        print("Closing connection")
+        print("**************************************************")
+        print("End chat")
+
+        # time.sleep(0.1) # prevent this print from coming before "end chat" message
+        print("\n\nClosing connection")
         if client_sock:
             client_sock.close()
 
