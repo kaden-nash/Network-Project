@@ -4,6 +4,8 @@ from recv_message import recv_message
 from typing import Optional
 
 class Message:
+    EXIT_KEYWORDS = {"/quit", "/exit"}
+    
     def __init__(self, text: str):
         self._text = text
     
@@ -65,13 +67,20 @@ class Message:
             raise TypeError("src was not a socket")
 
         self.set_text(recv_message(src))
-    
+
 
     def isEmpty(self) -> bool:
         """
         Returns True if text is empty, False otherwise
         """
-        return (not self._text)
+        return ((not self._text) or (self._text == ""))
+
+
+    def isDisconnecting(self) -> bool:
+        """
+        Return True if text is "" or in EXIT_KEYWORDS
+        """
+        return (self.isEmpty() or self._text in self.EXIT_KEYWORDS)
 
 
     def __sizeof__(self):

@@ -2,6 +2,7 @@ import socket
 import time
 from Message import Message
 import threading
+from prompt_toolkit import PromptSession
 
 HOST = "127.0.0.1"
 PORT = 55555
@@ -9,13 +10,14 @@ PORT = 55555
 exit_keywords = {"/quit", "/exit"}
 
 stop_event = threading.Event()
+send_fin = threading.Event()
+listen_fin = threading.Event()
 
-time.sleep(2)
+time.sleep(1) # delay for testing
 
 def send(sock: socket.socket) -> None:
     print("Begin chat")
     print("**************************************************")
-
 
     while not stop_event.is_set():
         raw_text = input()
@@ -23,12 +25,16 @@ def send(sock: socket.socket) -> None:
 
         try:
             msg.send(sock)
-        except OSError: # prevents "socket doesn't exist" error on cleanup
-            pass
-    
-        if msg.get_text() in exit_keywords or msg.isEmpty():
+        except ConnectionError as e:
+            print(f"{e}")
             stop_event.set()
             break
+    
+        if msg.isDisconnecting():
+            stop_event.set()
+            break
+    
+    send_fin.set()
     
 
 def listen(sock: socket.socket) -> None:
@@ -37,17 +43,28 @@ def listen(sock: socket.socket) -> None:
     while not stop_event.is_set():
         try:
             msg.recv(sock)
-        except OSError: # prevents "socket doesn't exist" error on cleanup
+        except ConnectionError as e:
+            print(f"{e}")
+            stop_event.set()
             break
 
-        if msg.get_text() in exit_keywords or msg.isEmpty():
-            print("<A client disconnected>")
-            stop_event.set()
-        else:
-            print(f"A client says: {msg}")
+        # handle self disconnect
+        if msg.get_text() == "":
+            break
 
-    # print("**************************************************")
-    # print("End chat\n")
+        # handle other client disconnect
+        if msg.isDisconnecting():
+            print("<A client disconnected>")
+            #TODO: Need to make this message specific for each account that disconnects and make sure this doesn't print when I myself disconnect
+            stop_event.set()
+            break
+        
+        print(f"A client says: {msg}")
+    
+    listen_fin.set()
+
+    print("**************************************************")
+    print("End chat")
         
 
 def start_client() -> None:    
@@ -66,13 +83,11 @@ def start_client() -> None:
         
         send_handler.start()
         listen_handler.start()
+        
+        send_fin.wait()
+        listen_fin.wait()
 
-        while send_handler.is_alive() and listen_handler.is_alive():
-            time.sleep(0.5)
-
-    except KeyboardInterrupt:
-        # print("**************************************************")
-        # print("End chat\n")
+    except KeyboardInterrupt: # stop via keyboard interrupt
         pass
 
     except ConnectionError as e:
@@ -84,16 +99,10 @@ def start_client() -> None:
     finally:
         # graceful disconnect
         try:
-            # client_sock.shutdown(socket.SHUT_RDWR)
-            pass
-        except Exception:
-            # print("Failed to properly shutdown"
+            client_sock.shutdown(socket.SHUT_RDWR)
+        except Exception: # ignore shutdown failure
             pass
 
-        print("**************************************************")
-        print("End chat")
-
-        # time.sleep(0.1) # prevent this print from coming before "end chat" message
         print("\n\nClosing connection")
         if client_sock:
             client_sock.close()

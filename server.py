@@ -6,7 +6,7 @@ from Message import Message
 host = "127.0.0.1"
 port = 55555
 
-time.sleep(2)
+time.sleep(1) # delay for testing
 
 # lock to prevent race conditions
 lock = threading.Lock()
@@ -15,33 +15,39 @@ lock = threading.Lock()
 clients = []
 clnt_addrs = []
 
-def broadcast(msg: Message, from_: socket.socket) -> None:
-    local_addr = from_.getsockname()
-
+def broadcast(msg: Message, from_ip: str, from_port: int) -> None:
     with lock:
         clnt_copy = list(clients)
         clnt_addrs_copy = list(clnt_addrs)
 
-        for sock, addr in zip(clnt_copy, clnt_addrs_copy):
-            if sock == from_:
+    for sock, addr in zip(clnt_copy, clnt_addrs_copy):
+        if addr[0] == from_ip and addr[1] == from_port:
+            if not msg.isDisconnecting(): # allow client recv to stop blocking when trying to disconnect
                 continue
 
-            try: 
-                msg.send(sock)
-            except ConnectionError as e:
-                print(f"Connection error broadcasting from {local_addr[0]}:{local_addr[1]} to {addr[0]}:{addr[1]}: {e}")
+        try: 
+            msg.send(sock)
+        except ConnectionError as e:
+            print(f"Connection error broadcasting from {from_ip}:{from_port} to {addr[0]}:{addr[1]}: {e}")
+            print(f"Closing socket w/ client {addr[0]}:{addr[1]}")
 
+            with lock:
                 if sock in clients:
                     clients.remove(sock)
                 if addr in clnt_addrs:
                     clnt_addrs.remove(addr)
 
-                try:
-                    sock.shutdown(socket.SHUT_RDWR)
-                except Exception:
-                    pass
-                finally:
-                    sock.close()
+            # recursively broadcast disconnects that occur till either everyone is disconnected or there are no connection errors during a broadcast
+            msg.set_text("/quit") # msg might not already be "/quit"
+            broadcast(msg, addr[0], addr[1])
+            print('had to recursively call broadcast due to connection error')
+
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except Exception:
+                pass
+            finally:
+                sock.close()
             
 
 def handle_client(client_socket: socket.socket, client_address) -> None:
@@ -50,33 +56,44 @@ def handle_client(client_socket: socket.socket, client_address) -> None:
         client_socket - socket on server for communication with a client
         client_address - Client's IPv4:PORT
     """
+    local_ip = client_address[0]
+    local_port = client_address[1]
+
     try: # listen for client message
         msg = Message("")
         while True:
             msg.recv(client_socket)
-            time.sleep(0.5)
-
-            if msg.isEmpty():
-                print(f"{client_address} disconnected.")
-                break
-            else:
-                broadcast(msg, client_socket)
-
+            time.sleep(0.1) # prevent excessive CPU use
+            broadcast(msg, local_ip, local_port)
             print(f"{client_address}: {msg}")
+            if msg.isDisconnecting(): # FIXME: Currently continues receiving messages from client that is not yet disconnected
+                break
+
+        print(f"{client_address} disconnected")
 
     except ConnectionError as e:
-        print(f"{client_address} disconnected.")
-        pass
+        print(f"{client_address} disconnected with error: {e}")
 
-    except Exception as e: # handle errors
+        # let other servers know that this client is abruptly disconnecting
+        msg.set_text("/quit") 
+        broadcast(msg, local_ip, local_port)
+
+    except Exception as e: 
         print(f"Error while handling client: {client_address}: {e}")
 
     finally: # close socket that communicates with client
         with lock:
             if client_socket in clients:
                 clients.remove(client_socket)
+            if client_address in clnt_addrs:
+                clnt_addrs.remove(client_address)
         
-        client_socket.close()
+        try:
+            client_socket.shutdown(socket.SHUT_RDWR)
+        except Exception: # ignore shutdown errors
+            pass
+        finally:
+            client_socket.close()
 
 def start_server() -> None:
     """
