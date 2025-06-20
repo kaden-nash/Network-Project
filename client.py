@@ -1,3 +1,6 @@
+# TODO: Implement a GUI
+# TODO: Switch to asyncio
+
 import socket
 import time
 from Message import Message
@@ -22,6 +25,7 @@ def send(sock: socket.socket) -> None:
     while not stop_event.is_set():
         raw_text = input()
         msg = Message(raw_text)
+        # TODO: Make this stop when listening receives a quit
 
         try:
             msg.send(sock)
@@ -32,6 +36,7 @@ def send(sock: socket.socket) -> None:
     
         if msg.isDisconnecting():
             stop_event.set()
+            # session.app.exit()
             break
     
     send_fin.set()
@@ -57,6 +62,8 @@ def listen(sock: socket.socket) -> None:
             print("<A client disconnected>")
             #TODO: Need to make this message specific for each account that disconnects and make sure this doesn't print when I myself disconnect
             stop_event.set()
+            # if session and session.app and session.app.loop:
+            #     session.app.loop.call_soon_threadsafe(session.app.exit)
             break
         
         print(f"A client says: {msg}")
@@ -77,6 +84,8 @@ def start_client() -> None:
         # connect to server (initiates 3 way handshake)
         client_sock.connect((HOST, PORT))
         print(f"Connected to {HOST}:{PORT}\n")
+
+        # session = PromptSession()
 
         send_handler = threading.Thread(target=send, args=[client_sock])
         listen_handler = threading.Thread(target=listen, args=[client_sock])
