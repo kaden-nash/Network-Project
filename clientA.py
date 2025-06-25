@@ -71,7 +71,6 @@ async def start_client() -> None:
         print(f"Connected to {HOST}:{PORT}\n")
 
         send_handler = asyncio.create_task(send(writer, session))
-        listen_handler = asyncio.create_task(listen(reader))
 
         await listen_fin.wait()
 
