@@ -1,11 +1,8 @@
-# TODO: Implement a GUI
-# TODO: Switch to asyncio
-
 import socket
 import time
 from Message import Message
 import threading
-from prompt_toolkit import PromptSession
+# from prompt_toolkit import PromptSession
 
 HOST = "127.0.0.1"
 PORT = 55555
