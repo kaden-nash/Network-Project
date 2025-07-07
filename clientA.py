@@ -1,20 +1,14 @@
 from MessageA import AsyncMessage
-from prompt_toolkit import PromptSession
 import asyncio
 
-async def send(writer: asyncio.StreamWriter, session: PromptSession) -> None:
-    print("Begin chat")
-    print("**************************************************")
-
+async def send(writer: asyncio.StreamWriter) -> None:
     while not stop_event.is_set():
+        msg = AsyncMessage("")
         try:
-            raw_text = await session.prompt_async("me: ")
-            msg = AsyncMessage(raw_text)
-            await msg.send(writer)
+            pass
+            # send message
 
         except asyncio.CancelledError:
-            if session.app and session.app.loop:
-                session.app.exit()
             raise asyncio.CancelledError
 
         except ConnectionError as e:
@@ -32,12 +26,10 @@ async def listen(reader: asyncio.StreamReader) -> None:
 
     while not stop_event.is_set():
         try:
-            await msg.recv(reader)
-
+            pass
+            # get message in socket
         except asyncio.CancelledError:
             stop_event.set()
-            if session.app and session.app.loop:
-                session.app.exit()
             raise asyncio.CancelledError
 
         except ConnectionError as e:
@@ -51,17 +43,13 @@ async def listen(reader: asyncio.StreamReader) -> None:
 
         # handle other client disconnect
         if msg.isDisconnecting():
-            print("<A client disconnected>")
             stop_event.set()
             break
         
-        print(f"A client says: {msg}")
-    
+        # display message
+
     listen_fin.set()
 
-    print("**************************************************")
-    print("End chat")
-        
 
 async def start_client() -> None:    
     await asyncio.sleep(1) # delay for testing
@@ -70,7 +58,8 @@ async def start_client() -> None:
         reader, writer = await asyncio.open_connection(HOST, PORT)
         print(f"Connected to {HOST}:{PORT}\n")
 
-        send_handler = asyncio.create_task(send(writer, session))
+        send_handler = asyncio.create_task(send(writer))
+        listen_handler = asyncio.create_task(listen(reader))
 
         await listen_fin.wait()
 
@@ -87,9 +76,6 @@ async def start_client() -> None:
         print(f"An error occured: {e}")
 
     finally:
-        if session.app and session.app.loop:
-            session.app.exit()
-        
         # closes writer and reader apparently
         if writer:
             writer.close()
@@ -107,7 +93,5 @@ if __name__ == "__main__":
 
     stop_event = asyncio.Event()
     listen_fin = asyncio.Event()
-
-    session = PromptSession()
 
     asyncio.run(start_client())

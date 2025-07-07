@@ -53,8 +53,9 @@ class ClientHandler:
 
         # rest of sending logic
     
-    def receive(self) -> None:
-        pass
+    def receive(self, callback) -> None:
+        callback() # clear ghost text in chatbox_Textbox
+
 
 class Frontend:
     def __init__(self, root: tk.Tk, eventbus: EventBus):
@@ -106,8 +107,8 @@ class Frontend:
         self.chatbar_Textbox.create_ghost_text("Enter message here")
         self.chatbar_Textbox.bind("<Button-1>", self.chatbar_Textbox.delete_ghost_text)
 
-        self.chatbox_Textbox.create_ghost_text("No messages to display yet...")
-        self.eventbus.subscribe("DELETE_CHATBOX_GHOST_TEXT", self.chatbox_Textbox.delete_ghost_text)
+        self.chatbox_Textbox.create_ghost_text("Its a ghost town in here...")
+        self.eventbus.subscribe("RECEIVED_MESSAGE", self.chatbox_Textbox.delete_ghost_text)
 
         self.sidebar_Textbox.insert_text("Connected hosts:\n\n", "default_message")
 
@@ -137,8 +138,6 @@ class Frontend:
         self.sidebar_Textbox.insert_text(host, f"{host}")
     
     def add_message(self, msg: str, sender: str) -> None:
-        self.eventbus.publish("DELETE_CHATBOX_GHOST_TEXT")
-        msg
         self.chatbox_Textbox.insert_text(msg, f"{sender}")
 
     def _on_send_press(self) -> None:
